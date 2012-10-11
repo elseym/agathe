@@ -20,7 +20,7 @@ installation
 run
 ---
 - with `redis server` running on `localhost`, start `bin/server.js`
-- navigate to [rts](http://localhost/rts/) using webkit or gecko
+- navigate to [localhost/rts](http://localhost/rts/) using webkit or gecko
 
 
 license

@@ -1,0 +1,58 @@
+body {
+    margin: 0;
+    padding: 0;
+}
+
+header {
+    padding: 10px;
+}
+
+section#content {
+
+}
+
+div.row div > div {
+    border: 1px solid #aaa;
+    margin: -1px;
+    height: 2.1em;
+}
+
+div.thumbnail {
+    text-align: center;
+}
+
+div.thumbnail h3 {
+    text-shadow: 1px 1px 3px #ddd;
+}
+
+div.thumbnail div.input-append {
+    margin: 10px auto;
+}
+
+div.thumbnail div.well {
+    margin: 10px 20px 20px 20px;
+    height: 50px;
+    overflow-x: hidden;
+    overflow-y: auto;
+}
+
+div.thumbnail div.well article {
+    font: 10px/12px "Helvetica Neue", sans-serif;
+    text-align: left;
+    margin: -13px;
+}
+
+div.thumbnail div.well article + article {
+    margin-top: 18px;
+    padding-top: 3px;
+    border-top: 1px dotted #666;
+}
+
+footer {
+    letter-spacing: 1px;
+    text-align: center;
+    padding: 10px;
+    margin: 20px 0 0 0;
+    color: #aaa;
+    border-top: 1px solid #ddd;
+}

@@ -57,7 +57,7 @@ class Api
         switch ($reqMethod) {
             case "GET":     $payload = $_GET; break;
             case "POST":    $payload = $_POST; break;
-            case "PUT":     $payload = file_get_contents("php://input"); break;
+            case "PUT":     $payload = $this->getInput(); break;
             case "DELETE":  break;
             default:        throw new ApiException("Method $reqMethod not supported.");
         }
@@ -88,14 +88,6 @@ class Api
         );
         array_unshift($funcParams, $header);
 
-        // setup-requests get extra info as last callback-param
-//        if ($reqUri === self::SETUP_URI) {
-//            $setupInfo = array(
-//                "resources" => $this->getResourceNames()
-//            );
-//            array_push($funcParams, $setupInfo);
-//        }
-
         if (!array_key_exists($reqMethod, $this->resources[$reqUri])) {
             $this->respond(array("error" => "Method $reqMethod not handled."), 400);
         } else {
@@ -103,7 +95,7 @@ class Api
             if (!is_array($ret)) {
                 $this->respond($ret);
             } else {
-                $retBody = isset($ret['data']) ? $ret['data'] : $ret;
+                $retBody = isset($ret['payload']) ? $ret['payload'] : $ret;
                 $retStatus = isset($ret['status']) ? $ret['status'] : 200;
                 $retError = isset($ret['error']) ? $ret['error'] : false;
                 $this->respond($retBody, $retStatus, $retError);
@@ -115,11 +107,24 @@ class Api
         return array_keys(array_diff_key($this->resources, array(self::SETUP_URI => 1)));
     }
 
+    private function getInput($raw = false) {
+        $input = file_get_contents("php://input");
+        if ($raw === true) {
+            return $input;
+        } elseif (strpos($_SERVER['CONTENT_TYPE'], "application/x-www-form-urlencoded") !== false) {
+            parse_str($input, $parsed);
+            return $parsed;
+        } elseif (strpos($_SERVER['CONTENT_TYPE'], "application/json") !== false) {
+            return json_decode($input);
+        }
+        return false;
+    }
+
     /**
      * @param $body
      * @param int $status
      */
-    public function respond($data, $status = 200, $error = false) {
+    public function respond($payload, $status = 200, $error = false) {
         $codes = Array(
             200 => 'OK', // success for get, delete, put
             201 => 'Created', // success for post
@@ -142,14 +147,14 @@ class Api
             throw new ApiException("Status code $status not allowed.");
         }
 
-        $data = array("data" => $data);
-        if (!array_key_exists("error", $data)) {
-            $data['error'] = false;
+        $payload = array("payload" => $payload);
+        if (!array_key_exists("error", $payload)) {
+            $payload['error'] = false;
         }
-        $data['error'] &= $error;
-        $res = json_encode($data);
+        $payload['error'] &= $error;
+        $res = json_encode($payload);
 
-        header("HTTP/1.1 " . $status . $codes[$status]);
+        header("HTTP/1.1 " . $status . " " . $codes[$status]);
         header("Content-Type: application/json");
         header("Content-Length: " . strlen($res));
 

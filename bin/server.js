@@ -1,68 +1,71 @@
 #!/usr/bin/env node
 
-String.prototype.uriToResource = function() { return this.replace(/\//, '').replace(/\//g, ':'); }
-String.prototype.resourceToUri = function() { return '/' + this.replace(/\:/g, '/'); }
+String.prototype.uriToKey = function() { return this.replace(/\//, '').replace(/\//g, ':'); }
+String.prototype.keyToUri = function() { return '/' + this.replace(/\:/g, '/'); }
 
 var io = require("socket.io").listen(8081),
     redis = require("redis"),
-    rd = redis.createClient(),  // redis data connection
-    rc = redis.createClient();  // redis ctrl connection
-
-io.configure(function() {
-    io.set('authorization', function(hd, cb) {
-        var sid = hd.headers.cookie.match(/PHPSESSID=([^\;]+);?/i)[1];
-        console.log("authorizing client with sid " + sid);
-        cb(null, true);
-    });
-});
+    rd = redis.createClient(),  // redis data
+    rc = redis.createClient();  // redis pubsub
 
 rc
     .on("pmessage", function(pattern, evt, data) {
-        console.info("redis msg", arguments)
-        var evtParams = evt.split(/\:/);
-        switch (evtParams[1]) {
-            case "data":
-                rd.get(data.uriToResource(), function(err, res) {
-                    io.of(data).emit(evtParams[2], res);
-                });
-                break;
-            case "ctrl":
-                switch (evtParams[2]) {
-                    case "new":
-                        registerNamespaces(data);
-                        break;
-                    default:
-                }
-                break;
-            default:
+        var evtParams = evt.match(/e:(ctrl|data):(.+)/);
+        if (evtParams == null) {
+            console.error("stupid inbound message via redis pubsub.");
+        } else {
+            if (evtParams[1] == "data") {
+                handleDataEvent(evtParams[2], data);
+            } else if (evtParams[1] == "ctrl") {
+                handleControlEvent(evtParams[2], data);
+            }
         }
-        //io.of(uri).emit(method.replace(/^e\:/, ''), "hallo");
     })
     .psubscribe("e:*");
 
-io
-    .on("connection", function(sock) {
-        sock
-            .on("message", function(msg, cb) {
-                //console.log("client: [s] ", arguments);
-            })
-            .on("hallo", function(data) {
-                //console.log("HALLO!! client: [s] ", arguments);
-            });
+function handleControlEvent(evt, data) {
+    var evtParams = evt.match(/([^:]+)+/g);
+    switch (evtParams[0]) {
+        case "client":
+            switch (evtParams[1]) {
+                case "new": registerNamespaces(data); break;
+                case "modified": checkNamespaces(data); break;
+                case "removed": registerNamespaces(data); break;
+                default:
+            }
+            break;
+        case "general":
+        default:
+    }
+}
+
+function handleDataEvent(evt, data) {
+    var key = "data:" + data.uriToKey();
+    console.log(arguments);
+    rd.hgetall(key, function(err, res) {
+        console.log(arguments);
+        // res can be null if no payload should be pushed.
+        io.of(data).emit(evt, res);
     });
+}
 
 function registerNamespaces(data) {
     rd.smembers(data, function(err, res) {
-        console.log("registering namespaces:", res);
-        if (err) return false;
-        rd.del(data);
         for (var i = 0; i < res.length; ++i) {
             if (res[i] in io.namespaces) continue;
-            io
-                .of(res[i])
-                .on("connection", function(sock) {
-                    sock.send("welcome to " + sock.namespace.name);
-                });
+            setupNamespace(res[i]);
         }
+        rd.del(data); // let php know that the namespaces are set up.
     });
+}
+
+function setupNamespace(ns) {
+    io
+        .of(ns)
+        .authorization(function(hd, cb) {
+            var sid = (hd.headers.cookie.match(/PHPSESSID=([^\;]+);?/i) || [,""])[1];
+            rd.sismember("ns:" + ns.uriToKey(), sid, function(err, res) {
+                return cb(null, res === 1);
+            });
+        });
 }
